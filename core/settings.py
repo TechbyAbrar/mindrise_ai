@@ -52,6 +52,11 @@ INSTALLED_APPS = [
     'account',
 ]
 
+AUTHENTICATION_BACKENDS = [
+    "account.backends.EmailPhoneUsernameBackend",
+    "django.contrib.auth.backends.ModelBackend",  # fallback
+]
+
 MIDDLEWARE = [
      "corsheaders.middleware.CorsMiddleware",  # CORS first
     'django.middleware.security.SecurityMiddleware',
