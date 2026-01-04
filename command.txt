@@ -1,0 +1,15 @@
+# run project
+gunicorn core.asgi:application \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --workers 4 \
+  --bind 0.0.0.0:8000 \
+  --access-logfile - \
+  --error-logfile -
+
+
+# pythonic real debugging
+gunicorn core.asgi:application \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --workers 1 \
+  --bind 0.0.0.0:8000 \
+  --log-level debug

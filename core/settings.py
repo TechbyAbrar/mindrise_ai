@@ -184,61 +184,59 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# logging setup
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+LOGGING_CONFIG = "logging.config.dictConfig"
+LOGGING_DISABLE_EXISTING_LOGGERS = False
 
-# Ensure logs directory exists
-LOG_FILE_DIR = BASE_DIR / "logs"
-LOG_FILE_DIR.mkdir(exist_ok=True)
-
-# Automatically delete old log files (>5 days)
-for f in LOG_FILE_DIR.glob("bugsfixing.log.*"):
-    try:
-        date_str = f.name.split(".")[-1]
-        file_date = datetime.strptime(date_str, "%Y-%m-%d")
-        if datetime.now() - file_date > timedelta(days=5):
-            f.unlink()
-    except Exception:
-        pass  # skip files that do not match the pattern
-
-# Generate today’s log file path
-today = datetime.now().strftime("%Y-%m-%d")
-log_file_path = LOG_FILE_DIR / f"bugsfixing.log.{today}"
-
-# Simplified LOGGING dict
 LOGGING = {
     "version": 1,
-    "disable_existing_loggers": False,
 
     "formatters": {
-        "simple": {
-            "format": "[{levelname}] {message}",
+        "standard": {
+            "format": (
+                "[{asctime}] "
+                "[{levelname}] "
+                "[pid:{process}] "
+                "[{name}] "
+                "{message}"
+            ),
             "style": "{",
         },
     },
 
     "handlers": {
-        "file": {
-            "level": "INFO",  # Only log success and failures, not debug
-            "class": "logging.FileHandler",
-            "filename": str(log_file_path),
-            "formatter": "simple",
+        "operations_file": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "level": "INFO",
+            "filename": LOG_DIR / "operations.log",
+            "when": "midnight",
+            "backupCount": 5,
             "encoding": "utf-8",
+            "formatter": "standard",
+        },
+        "errors_file": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "level": "ERROR",
+            "filename": LOG_DIR / "errors.log",
+            "when": "midnight",
+            "backupCount": 5,
+            "encoding": "utf-8",
+            "formatter": "standard",
         },
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "simple",
+            "formatter": "standard",
         },
     },
 
-    "loggers": {
-        "myapp": {
-            "handlers": ["file", "console"],
-            "level": "INFO",  # Only info and error
-            "propagate": False,
-        },
+    "root": {
+        "level": "INFO",
+        "handlers": ["operations_file", "errors_file", "console"],
     },
 }
-
 
 # Email Configuration
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
