@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils import timezone
-
 from .managers import CustomUserManager
 from .utils import generate_otp, get_otp_expiry, validate_image
 
@@ -17,14 +16,12 @@ class UserAuth(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=["is_active", "is_verified"]),
         ]
 
-    # Primary key (fast, compatible, scalable)
     user_id = models.BigAutoField(primary_key=True)
 
-    # Authentication identifiers
     email = models.EmailField(unique=True, max_length=255)
     phone = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    username = models.CharField(max_length=50, unique=True, null=True, blank=True)
 
-    # Profile
     full_name = models.CharField(max_length=255)
     profile_pic = models.ImageField(
         upload_to="profile/",
@@ -33,24 +30,24 @@ class UserAuth(AbstractBaseUser, PermissionsMixin):
         blank=True,
         validators=[validate_image],
     )
+    profile_pic_url = models.URLField(max_length=200, blank=True, null=True)
+    
     country = models.CharField(max_length=100, null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
 
-    # OTP (plain text, per requirement)
     otp = models.CharField(max_length=6, null=True, blank=True)
     otp_expired_at = models.DateTimeField(null=True, blank=True)
 
-    # Status flags
+
     is_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
-    # Auditing
+
     date_joined = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     last_login = models.DateTimeField(null=True, blank=True)
 
-    # Django auth config
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name"]
 

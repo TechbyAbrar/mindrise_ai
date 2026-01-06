@@ -2,26 +2,28 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
+from .utils import generate_username
+
 
 class CustomUserManager(BaseUserManager):
 
-    def _create_user(self, *, email=None, phone=None, username=None, password, **extra_fields):
-        if not password:
-            raise ValueError(_("Password must be provided"))
+    def _create_user(self, *, email, full_name, password=None, **extra_fields):
+        if not email:
+            raise ValueError(_("Email must be provided"))
 
-        if not any([email, phone, username]):
-            raise ValueError(
-                _("User must have at least one identifier: email, phone, or username")
-            )
+        if not full_name:
+            raise ValueError(_("Full name must be provided"))
 
-        if email:
-            email = self.normalize_email(email)
+        email = self.normalize_email(email)
+
+        # Auto-generate username if missing
+        if not extra_fields.get("username"):
+            extra_fields["username"] = generate_username(email)
 
         with transaction.atomic():
             user = self.model(
                 email=email,
-                phone=phone,
-                username=username,
+                full_name=full_name,
                 **extra_fields,
             )
             user.set_password(password)
@@ -29,20 +31,19 @@ class CustomUserManager(BaseUserManager):
 
         return user
 
-    def create_user(self, *, email=None, phone=None, username=None, password=None, **extra_fields):
+    def create_user(self, *, email, full_name, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         extra_fields.setdefault("is_verified", False)
 
         return self._create_user(
             email=email,
-            phone=phone,
-            username=username,
+            full_name=full_name,
             password=password,
             **extra_fields,
         )
 
-    def create_superuser(self, *, email=None, phone=None, username=None, password=None, **extra_fields):
+    def create_superuser(self, *, email, full_name, password, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_verified", True)
@@ -55,8 +56,7 @@ class CustomUserManager(BaseUserManager):
 
         return self._create_user(
             email=email,
-            phone=phone,
-            username=username,
+            full_name=full_name,
             password=password,
             **extra_fields,
         )

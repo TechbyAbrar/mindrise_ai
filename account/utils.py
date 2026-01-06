@@ -124,7 +124,6 @@ def validate_image(image) -> None:
 # Username Utility
 # ---------------------------
 def generate_username(email: str) -> str:
-    """Generate a username based on email with random suffix."""
     base = email.split("@")[0][:8]
     suffix = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
     return f"{base}{suffix}"
