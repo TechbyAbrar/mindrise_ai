@@ -52,6 +52,9 @@ INSTALLED_APPS = [
     'account',
 ]
 
+
+AUTH_USER_MODEL = "account.UserAuth"
+
 AUTHENTICATION_BACKENDS = [
     "account.backends.EmailPhoneUsernameBackend",
     "django.contrib.auth.backends.ModelBackend",  # fallback
