@@ -192,53 +192,33 @@ CORS_ALLOW_CREDENTIALS = True
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-LOGGING_CONFIG = "logging.config.dictConfig"
-LOGGING_DISABLE_EXISTING_LOGGERS = False
-
 LOGGING = {
     "version": 1,
-
+    "disable_existing_loggers": False,
     "formatters": {
-        "standard": {
-            "format": (
-                "[{asctime}] "
-                "[{levelname}] "
-                "[pid:{process}] "
-                "[{name}] "
-                "{message}"
-            ),
+        "minimal": {
+            "format": "{asctime} {levelname} {name} {message}",
             "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
-
     "handlers": {
-        "operations_file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
+        "file": {
+            "class": "logging.handlers.WatchedFileHandler",
             "level": "INFO",
-            "filename": LOG_DIR / "operations.log",
-            "when": "midnight",
-            "backupCount": 5,
+            "filename": LOG_DIR / "app.log",
             "encoding": "utf-8",
-            "formatter": "standard",
-        },
-        "errors_file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
-            "level": "ERROR",
-            "filename": LOG_DIR / "errors.log",
-            "when": "midnight",
-            "backupCount": 5,
-            "encoding": "utf-8",
-            "formatter": "standard",
+            "formatter": "minimal",
         },
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "standard",
+            "level": "ERROR",
+            "formatter": "minimal",
         },
     },
-
     "root": {
         "level": "INFO",
-        "handlers": ["operations_file", "errors_file", "console"],
+        "handlers": ["file", "console"],
     },
 }
 

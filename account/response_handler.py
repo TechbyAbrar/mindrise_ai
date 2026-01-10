@@ -1,45 +1,61 @@
-import logging
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.views import exception_handler as drf_exception_handler
-from rest_framework.exceptions import ValidationError, PermissionDenied, NotAuthenticated, APIException
 
-logger = logging.getLogger(__name__)
+class ResponseHandler:
 
-def build_response(
-    success: bool,
-    message: str,
-    data=None,
-    errors=None,
-    status_code=status.HTTP_200_OK,
-) -> Response:
-    """Minimal response builder."""
-    return Response(
-        {
-            "success": success,
-            "message": message,
-            "data": data or {},
-            "errors": errors or {},
-        },
-        status=status_code,
-    )
+    @staticmethod
+    def success(message="Success.", data=None, status_code=status.HTTP_200_OK, extra=None):
+        payload = {"success": True, "message": message}
+        if data is not None:
+            payload["data"] = data
+        if extra:
+            payload["extra"] = extra
+        return Response(payload, status=status_code)
 
+    @staticmethod
+    def created(message="Created successfully.", data=None, extra=None):
+        return ResponseHandler.success(message, data, status.HTTP_201_CREATED, extra)
 
-# Simple, fast response helpers
-def success_response(message="Request successful.", data=None):
-    return build_response(True, message, data=data)
+    @staticmethod
+    def updated(message="Updated successfully.", data=None, extra=None):
+        return ResponseHandler.success(message, data, status.HTTP_200_OK, extra)
 
-def created_response(message="Resource created.", data=None):
-    return build_response(True, message, data=data, status_code=status.HTTP_201_CREATED)
+    @staticmethod
+    def deleted(message="Deleted successfully.", extra=None):
+        payload = {"success": True, "message": message}
+        if extra:
+            payload["extra"] = extra
+        return Response(payload, status=status.HTTP_204_NO_CONTENT)
 
-def bad_request_response(message="Invalid request.", errors=None):
-    return build_response(False, message, errors=errors, status_code=status.HTTP_400_BAD_REQUEST)
+    @staticmethod
+    def error(message="An error occurred.", errors=None, status_code=status.HTTP_400_BAD_REQUEST, extra=None):
+        payload = {"success": False, "message": message}
+        if errors is not None:
+            payload["errors"] = errors
+        if extra:
+            payload["extra"] = extra
+        return Response(payload, status=status_code)
 
-def unauthorized_response(message="Authentication required.", errors=None):
-    return build_response(False, message, errors=errors, status_code=status.HTTP_401_UNAUTHORIZED)
+    @staticmethod
+    def bad_request(message="Invalid request.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_400_BAD_REQUEST, extra)
 
-def forbidden_response(message="Access forbidden.", errors=None):
-    return build_response(False, message, errors=errors, status_code=status.HTTP_403_FORBIDDEN)
+    @staticmethod
+    def unauthorized(message="Authentication required.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_401_UNAUTHORIZED, extra)
 
-def server_error_response(message="Internal server error.", errors=None):
-    return build_response(False, message, errors=errors, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @staticmethod
+    def forbidden(message="Access forbidden.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_403_FORBIDDEN, extra)
+
+    @staticmethod
+    def not_found(message="Resource not found.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_404_NOT_FOUND, extra)
+
+    @staticmethod
+    def conflict(message="Conflict detected.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_409_CONFLICT, extra)
+
+    @staticmethod
+    def server_error(message="Internal server error.", errors=None, extra=None):
+        return ResponseHandler.error(message, errors, status.HTTP_500_INTERNAL_SERVER_ERROR, extra)
