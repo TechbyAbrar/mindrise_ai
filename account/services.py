@@ -1,8 +1,12 @@
+import secrets
+import string
 import logging
 from typing import Any, Dict
 
 from django.conf import settings
 from django.core.mail import send_mail, BadHeaderError
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken
 
 try:
@@ -11,6 +15,15 @@ except ImportError:
     messagebird = None
 
 logger = logging.getLogger(__name__)
+
+
+def generate_otp(length: int = 6) -> str:
+    return ''.join(secrets.choice("0123456789") for _ in range(length))
+
+def generate_username(email: str) -> str:
+    base = email.split("@")[0][:8]
+    suffix = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+    return f"{base}{suffix}"
 
 
 def send_email(subject: str, message: str, recipient_email: str) -> bool:

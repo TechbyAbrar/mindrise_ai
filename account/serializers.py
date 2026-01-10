@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .utils import generate_username, validate_image
+from .utils import  validate_image
+from .services import generate_username
 from .models import UserAuth
 User = get_user_model()
 

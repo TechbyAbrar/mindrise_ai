@@ -1,5 +1,3 @@
-import secrets
-import string
 from datetime import timedelta
 from typing import Any, Dict, Optional
 
@@ -8,18 +6,9 @@ import requests
 from PIL import Image
 from django.utils import timezone
 
-def generate_otp(length: int = 6) -> str:
-    return ''.join(secrets.choice("0123456789") for _ in range(length))
-
 
 def get_otp_expiry(minutes: int = 30) -> timezone.datetime:
     return timezone.now() + timedelta(minutes=minutes)
-
-
-def generate_username(email: str) -> str:
-    base = email.split("@")[0][:8]
-    suffix = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
-    return f"{base}{suffix}"
 
 
 def validate_image(image: Any) -> None:
