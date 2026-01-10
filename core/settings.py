@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     # Third party apps
     "rest_framework",
     "corsheaders",    
+    "drf_spectacular",
         
     # Local apps
     'account',
@@ -155,13 +156,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST Framework & JWT
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
-    'EXCEPTION_HANDLER': 'core.utils.custom_exception_handler', # Custom exception handler
 }
 
 from datetime import timedelta

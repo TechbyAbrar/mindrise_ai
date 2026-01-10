@@ -1,20 +1,20 @@
 from rest_framework import serializers
-from .models import UserAuth
+from django.contrib.auth import get_user_model
 from django.utils import timezone
+from .utils import generate_username, validate_image
+from .models import UserAuth
+User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
-    profile_pic_url = serializers.SerializerMethodField(read_only=True)
-    is_otp_valid = serializers.SerializerMethodField(read_only=True)
-
     class Meta:
         model = UserAuth
         fields = [
             "user_id",
             "email",
-            "phone",
             "username",
             "full_name",
+            "phone",
             "profile_pic",
             "profile_pic_url",
             "country",
@@ -23,11 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "is_staff",
             "date_joined",
-            "updated_at",
             "last_login",
-            "otp", 
-            "otp_expired_at", 
-            "is_otp_valid",
         ]
         read_only_fields = [
             "user_id",
@@ -35,30 +31,88 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "is_staff",
             "date_joined",
-            "updated_at",
             "last_login",
         ]
 
-    def get_profile_pic_url(self, obj: UserAuth):
-        if obj.profile_pic:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.profile_pic.url)
-            return obj.profile_pic.url
-        return None
-
-    def get_is_otp_valid(self, obj: UserAuth):
-        # returns True/False if OTP exists and is still valid
-        if obj.otp and obj.otp_expired_at:
-            return obj.otp_expired_at >= timezone.now()
-        return False
-
-    def validate_phone(self, value):
-        if value and not value.isdigit():
-            raise serializers.ValidationError("Phone number must contain only digits.")
+    def validate_username(self, value: str) -> str:
+        if value:
+            qs = UserAuth.objects.filter(username__iexact=value)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError("Username already in use.")
         return value
 
-    def validate_otp(self, value):
-        if value and len(value) != 6:
-            raise serializers.ValidationError("OTP must be 6 digits.")
+    def validate_profile_pic(self, value):
+        if value:
+            validate_image(value)
         return value
+
+
+class SignupSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6, required=True)
+    confirm_password = serializers.CharField(write_only=True, min_length=6, required=True)
+
+    class Meta:
+        model = UserAuth
+        fields = [
+            "email",
+            "username",
+            "full_name",
+            "phone",
+            "password",
+            "confirm_password",
+        ]
+
+    def validate_email(self, value: str) -> str:
+        qs = UserAuth.objects.filter(email__iexact=value)
+        if qs.exists():
+            raise serializers.ValidationError("Email already registered.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs
+
+    def create(self, validated_data: dict) -> UserAuth:
+        validated_data.pop("confirm_password", None)
+        password = validated_data.pop("password")
+
+        if not validated_data.get("username"):
+            # Use utils to generate username
+            username = generate_username(validated_data["email"])
+            while UserAuth.objects.filter(username=username).exists():
+                username = generate_username(validated_data["email"])
+            validated_data["username"] = username
+
+        user = UserAuth(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+
+class VerifyOTPSerializer(serializers.Serializer):
+    otp = serializers.CharField(max_length=6, write_only=True)
+
+    def validate(self, data):
+        try:
+            user = User.objects.get(otp=data["otp"], otp_expired_at__gte=timezone.now())
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"otp": "Invalid or expired OTP."})
+
+        if user.is_verified:
+            raise serializers.ValidationError({"otp": "User already verified."})
+
+        data["user"] = user
+        return data
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        from django.db import transaction
+        with transaction.atomic():
+            user.is_verified = True
+            user.otp = None
+            user.otp_expired = None
+            user.save(update_fields=["is_verified", "otp", "otp_expired_at"])
+        return user
