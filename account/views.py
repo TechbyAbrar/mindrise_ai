@@ -114,3 +114,81 @@ class ResendOTPView(APIView):
                 "expires_at": expires_at,
             },
         )
+        
+
+from django.utils import timezone
+from django.core.cache import cache
+from django.contrib.auth import authenticate
+from django.db.models import Q
+
+LOGIN_MAX_ATTEMPTS = 5      # max failed login attempts
+LOGIN_BLOCK_SECONDS = 300   # block for 5 minutes if exceeded
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email_or_username = request.data.get("email", "").strip().lower()
+        password = request.data.get("password", "")
+
+        if not email_or_username or not password:
+            return ResponseHandler.bad_request("Email/username and password are required")
+
+        ip = self._get_ip(request)
+        login_key = f"login:attempts:{ip}:{email_or_username}"
+
+        # Safe increment: initialize key if not exists
+        if cache.get(login_key) is None:
+            cache.set(login_key, 0, timeout=LOGIN_BLOCK_SECONDS)
+
+        if cache.get(login_key) >= LOGIN_MAX_ATTEMPTS:
+            logger.warning("Blocked login attempt", extra={"ip": ip, "user": email_or_username})
+            return ResponseHandler.error(
+                f"Too many failed login attempts. Try again in {LOGIN_BLOCK_SECONDS // 60} minutes",
+                status_code=429,
+            )
+
+        try:
+            user = UserAuth.objects.only(
+                "user_id", "email", "password", "is_active", "is_verified"
+            ).get(Q(email__iexact=email_or_username) | Q(username__iexact=email_or_username) | Q(phone=email_or_username))
+        except UserAuth.DoesNotExist:
+            cache.incr(login_key)
+            logger.warning("Failed login: user not found", extra={"ip": ip, "user": email_or_username})
+            return ResponseHandler.unauthorized("Invalid credentials")
+
+        if not user.is_active:
+            return ResponseHandler.forbidden("User account inactive")
+        if not user.is_verified:
+            return ResponseHandler.forbidden("Email not verified")
+
+        authenticated_user = authenticate(request, username=email_or_username, password=password)
+        
+        if not authenticated_user:
+            cache.incr(login_key)
+            logger.warning("Failed login: wrong password", extra={"user_id": user.user_id, "email": user.email, "ip": ip})
+            return ResponseHandler.unauthorized("Invalid credentials")
+
+        # Successful login
+        cache.delete(login_key)
+        with transaction.atomic():
+            UserAuth.objects.filter(pk=user.user_id).update(last_login=timezone.now())
+            user.refresh_from_db(fields=["last_login"])
+
+        tokens = generate_tokens_for_user(user)
+        logger.info("User login successful", extra={"user_id": user.user_id, "email": user.email, "ip": ip})
+
+        return ResponseHandler.success(
+            "Login successful",
+            data={
+                "user": UserSerializer(user).data,
+                "tokens": tokens
+            },
+        )
+
+    @staticmethod
+    def _get_ip(request):
+        x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded:
+            return x_forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
