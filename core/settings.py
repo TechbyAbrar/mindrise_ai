@@ -189,6 +189,10 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 
 # logging setup
+import logging
+from logging.handlers import TimedRotatingFileHandler
+
+# Logs directory
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -204,11 +208,15 @@ LOGGING = {
     },
     "handlers": {
         "file": {
-            "class": "logging.handlers.WatchedFileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "level": "INFO",
             "filename": LOG_DIR / "app.log",
+            "when": "midnight",         # rotate every day at midnight
+            "interval": 1,              # every 1 day
+            "backupCount": 5,           # keep only last 5 days
             "encoding": "utf-8",
             "formatter": "minimal",
+            "utc": True,                # optional: use UTC time for rotation
         },
         "console": {
             "class": "logging.StreamHandler",
@@ -221,6 +229,7 @@ LOGGING = {
         "handlers": ["file", "console"],
     },
 }
+
 
 # Email Configuration
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
