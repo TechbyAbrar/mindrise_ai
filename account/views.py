@@ -13,6 +13,10 @@ from django.core.cache import cache
 from django.contrib.auth import authenticate
 from django.db.models import Q
 
+from typing import Any
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.hashers import make_password     
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -274,5 +278,64 @@ class ForgetPasswordView(APIView):
         )
         
         
+  
+class ForgetPasswordVerificationAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request: Any) -> Any:
+        otp: str | None = request.data.get("otp")
+        if not otp:
+            return ResponseHandler.bad_request("OTP is required")
+
+        try:
+            user: UserAuth = UserAuth.objects.only(
+                "user_id", "email", "otp", "otp_expired_at", "is_verified"
+            ).get(otp=otp, is_verified=True)
+        except UserAuth.DoesNotExist:
+            return ResponseHandler.bad_request("Invalid or expired OTP")
+
+        if not user.otp_expired_at or timezone.now() > user.otp_expired_at:
+            return ResponseHandler.bad_request("OTP has expired")
+
+        try:
+            tokens: dict[str, str] = generate_tokens_for_user(user)
+            return ResponseHandler.success(
+                f"OTP verified successfully for {user.email}",
+                {"access_token": tokens["access"]}
+            )
+        except Exception as exc:
+            logger.exception("Token generation failed for user %s", user.user_id)
+            return ResponseHandler.server_error("Internal server error")
         
-        
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request: Any) -> Any:
+        new_password: str | None = request.data.get("new_password")
+        confirm_password: str | None = request.data.get("confirm_password")
+
+        if not new_password or not confirm_password:
+            return ResponseHandler.bad_request("Both passwords are required")
+
+        if new_password != confirm_password:
+            return ResponseHandler.bad_request("Passwords do not match")
+
+        user = request.user
+
+        try:
+            user.password = make_password(new_password)
+            user.save(update_fields=["password"])
+
+            UserAuth.objects.filter(user_id=user.user_id).update(
+                otp=None,
+                otp_expired_at=None
+            )
+
+            return ResponseHandler.success("Password reset successful")
+
+        except Exception:
+            logger.exception("Password reset failed for user %s", user.user_id)
+            return ResponseHandler.server_error("Internal server error")
