@@ -16,7 +16,8 @@ from django.db.models import Q
 from typing import Any
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.hashers import make_password     
-
+from .utils import decode_google_token, decode_apple_token
+from typing import Dict, Optional    
 import logging
 logger = logging.getLogger(__name__)
 
@@ -338,4 +339,93 @@ class ResetPasswordAPIView(APIView):
 
         except Exception:
             logger.exception("Password reset failed for user %s", user.user_id)
+            return ResponseHandler.server_error("Internal server error")
+        
+ 
+   
+class SocialLoginAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request: Any) -> Any:
+        provider: str | None = request.data.get("provider")
+        token: str | None = request.data.get("token")
+
+        if not provider or not token:
+            return ResponseHandler.bad_request("Provider and token are required")
+
+        provider = provider.lower()
+        if provider not in {"google", "apple"}:
+            return ResponseHandler.bad_request("Unsupported provider")
+
+        try:
+            user_data: Optional[Dict[str, str]] = (
+                decode_google_token(token) if provider == "google"
+                else decode_apple_token(token)
+            )
+
+            if not user_data or not user_data.get("email"):
+                return ResponseHandler.bad_request(f"Invalid {provider.capitalize()} token")
+
+            email: str = user_data["email"]
+
+            user, created = UserAuth.objects.get_or_create(
+                email=email,
+                defaults={
+                    "full_name": user_data.get("full_name", email.split("@")[0]),
+                    "profile_pic_url": user_data.get("profile_pic_url"),
+                    "is_verified": True,
+                },
+            )
+
+            updated_fields = []
+            if not created:
+                if user.full_name != user_data.get("full_name", user.full_name):
+                    user.full_name = user_data.get("full_name", user.full_name)
+                    updated_fields.append("full_name")
+                if user.profile_pic_url != user_data.get("profile_pic_url", user.profile_pic_url):
+                    user.profile_pic_url = user_data.get("profile_pic_url", user.profile_pic_url)
+                    updated_fields.append("profile_pic_url")
+                if updated_fields:
+                    user.save(update_fields=updated_fields)
+
+            tokens = generate_tokens_for_user(user)
+
+            serialized_user = UserSerializer(user, context={"request": request}).data
+
+            message = (
+                f"User created via {provider.capitalize()} login"
+                if created else f"User logged in via {provider.capitalize()}"
+            )
+
+            return ResponseHandler.success(
+                message,
+                {"access_token": tokens["access"], "user": serialized_user}
+            )
+
+        except Exception as exc:
+            logger.exception("Social login failed: %s", exc)
+            return ResponseHandler.server_error("Internal server error")
+        
+        
+class UserDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request: Any, user_id: int) -> Any:
+        try:
+            if not (request.user.is_superuser or request.user.user_id == user_id):
+                return ResponseHandler.forbidden("You do not have permission to delete this user")
+
+            try:
+                user = UserAuth.objects.only("user_id", "email").get(user_id=user_id)
+            except UserAuth.DoesNotExist:
+                return ResponseHandler.not_found("User not found")
+
+            user.delete()
+
+            return ResponseHandler.deleted(f"User {user.email} deleted successfully")
+
+        except Exception as exc:
+            logger.exception("Failed to delete user %s", user_id)
             return ResponseHandler.server_error("Internal server error")
