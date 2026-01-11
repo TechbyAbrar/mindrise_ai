@@ -15,6 +15,7 @@ class UserAuth(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=["email"]),
             models.Index(fields=["phone"]),
             models.Index(fields=["is_active", "is_verified"]),
+            models.Index(fields=["otp"]),
         ]
 
     user_id = models.BigAutoField(primary_key=True)

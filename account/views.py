@@ -8,6 +8,11 @@ from .utils import get_otp_expiry
 from .response_handler import ResponseHandler  # Use class directly
 from .models import UserAuth
 
+from django.utils import timezone
+from django.core.cache import cache
+from django.contrib.auth import authenticate
+from django.db.models import Q
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -21,17 +26,14 @@ class SignupAPIView(APIView):
         with transaction.atomic():
             user = serializer.save()
 
-            # Generate and set OTP
             otp = generate_otp()
             user.set_otp(otp)
 
-            # Send OTP email
             send_otp_email(user.email, otp)
 
             # Generate tokens
             tokens = generate_tokens_for_user(user)
 
-            # Return consistent response
             return ResponseHandler.created(
                 message="User created successfully. OTP sent to email.",
                 data={
@@ -39,7 +41,6 @@ class SignupAPIView(APIView):
                     "access_tokens": tokens["access"],
                 },
             )
-
 
 class VerifyOTPAPIView(APIView):
     permission_classes = [AllowAny]
@@ -81,7 +82,6 @@ class ResendOTPView(APIView):
         otp = generate_otp()
         expires_at = get_otp_expiry()  # ← reuse your utility
 
-        # Single, cheap DB write
         with transaction.atomic():
             UserAuth.objects.filter(pk=user.pk).update(
                 otp=otp,
@@ -116,13 +116,8 @@ class ResendOTPView(APIView):
         )
         
 
-from django.utils import timezone
-from django.core.cache import cache
-from django.contrib.auth import authenticate
-from django.db.models import Q
-
-LOGIN_MAX_ATTEMPTS = 5      # max failed login attempts
-LOGIN_BLOCK_SECONDS = 300   # block for 5 minutes if exceeded
+LOGIN_MAX_ATTEMPTS = 5     
+LOGIN_BLOCK_SECONDS = 300  
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -192,3 +187,92 @@ class LoginView(APIView):
         if x_forwarded:
             return x_forwarded.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR", "")
+    
+    
+# ----- Rate limiting config -----
+FORGET_MAX_PER_HOUR = 10
+FORGET_COOLDOWN_SECONDS = 60  
+
+class ForgetPasswordView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        identifier = request.data.get("email", "").strip().lower()
+        
+        if not identifier:
+            return ResponseHandler.bad_request("Email, phone, or username is required")
+
+        cooldown_key = f"forget:cooldown:{identifier}"
+        hourly_key = f"forget:hour:{identifier}"
+
+        if cache.get(cooldown_key):
+            return ResponseHandler.error( 
+                "Please wait before requesting another password reset",
+                status_code=429,
+            )
+
+        hourly_count = cache.get(hourly_key, 0)
+        if hourly_count >= FORGET_MAX_PER_HOUR:
+            return ResponseHandler.error(
+                "Password reset limit exceeded. Try again later.",
+                status_code=429,
+            )
+
+        try:
+            user = UserAuth.objects.only("user_id", "email", "is_active", "is_verified").get(
+                Q(email__iexact=identifier) |
+                Q(username__iexact=identifier) |
+                Q(phone=identifier)
+            )
+        except UserAuth.DoesNotExist:
+            self._set_limits(identifier)
+            return ResponseHandler.success(
+                "If the account exists, a password reset OTP has been sent"
+            )
+
+        if not user.is_active or not user.is_verified:
+            self._set_limits(identifier)
+            return ResponseHandler.success(
+                "If the account exists, a password reset OTP has been sent"
+            )
+
+        otp = generate_otp()
+        otp_expiry = get_otp_expiry(minutes=30)
+
+        try:
+            with transaction.atomic():
+                user.otp = otp
+                user.otp_expired_at = otp_expiry
+                user.save(update_fields=["otp", "otp_expired_at"])
+                self._set_limits(identifier)
+        except Exception:
+            logger.exception("Error saving OTP", extra={"user_id": user.user_id})
+            return ResponseHandler.server_error("Unable to process request. Try later.")
+
+        if not send_otp_email(user.email, otp):
+            logger.error("Failed to send OTP email", extra={"user_id": user.user_id})
+            return ResponseHandler.success(
+                "If the account exists, a password reset OTP has been sent"
+            )
+
+        logger.info(
+            "Password reset OTP sent",
+            extra={"user_id": user.user_id, "email": user.email},
+        )
+
+        return ResponseHandler.success(
+            "If the account exists, a password reset OTP has been sent"
+        )
+
+    def _set_limits(self, identifier: str) -> None:
+        cache.set(f"forget:cooldown:{identifier}", 1, timeout=FORGET_COOLDOWN_SECONDS)
+        cache.set(
+            f"forget:hour:{identifier}",
+            cache.get(f"forget:hour:{identifier}", 0) + 1,
+            timeout=3600,
+        )
+        
+        
+        
+        
