@@ -32,6 +32,7 @@ urlpatterns = [
     
     # versioned api routes
     path('api/v1/account/', include('account.urls')),
+    path('api/v1/onboarding/', include('onboarding.urls')),
 ]
 
 
