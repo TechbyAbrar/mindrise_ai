@@ -18,6 +18,7 @@ class UserAuthAdmin(UserAdmin):
         "is_active",
         "is_staff",
         "is_verified",
+        "is_subscribed",
         "date_joined",
     )
 

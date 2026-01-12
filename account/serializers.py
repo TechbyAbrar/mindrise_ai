@@ -23,6 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_verified",
             "is_active",
             "is_staff",
+            "is_subscribed",
             "date_joined",
             "last_login",
         ]
