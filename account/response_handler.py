@@ -2,7 +2,6 @@ from rest_framework.response import Response
 from rest_framework import status
 
 class ResponseHandler:
-
     @staticmethod
     def success(message="Success.", data=None, status_code=status.HTTP_200_OK, extra=None):
         payload = {"success": True, "message": message}
