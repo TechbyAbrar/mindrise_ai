@@ -8,7 +8,6 @@ class OnboardingService:
     @staticmethod
     @transaction.atomic
     def create_onboarding(user_id: int, coaching_style: str, focus: List[str]) -> OnboardingStep:
-        # Check coaching style exists
         if not CoachingStyle.objects.filter(value=coaching_style, is_active=True).exists():
             raise ValueError("Coaching style does not exist")
 

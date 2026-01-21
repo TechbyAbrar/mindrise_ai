@@ -17,7 +17,7 @@ class CreateOnboardingAPIView(APIView):
 
         try:
             onboarding = OnboardingService.create_onboarding(
-                user_id=user.id,
+                user_id=user.user_id,
                 coaching_style=serializer.validated_data["coaching_style"],
                 focus=serializer.validated_data.get("focus", [])
             )
@@ -38,7 +38,7 @@ class GetOnboardingAPIView(APIView):
     def get(self, request, coaching_style: str):
         user = request.user
         try:
-            onboarding = OnboardingService.get_onboarding(user.id, coaching_style)
+            onboarding = OnboardingService.get_onboarding(user.user_id, coaching_style)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
 

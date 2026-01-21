@@ -23,18 +23,30 @@ class CoachingStyle(models.Model):
         return self.name
     
 class OnboardingStep(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="onboarding_steps", db_index=True)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="onboarding",
+        db_index=True
+    )
+
+    coaching_style = models.ForeignKey(
+        CoachingStyle,
+        on_delete=models.PROTECT,
+        related_name="onboarding_steps"
+    )
+
     focus = models.JSONField(default=list, blank=True)
-    coaching_style = models.CharField(max_length=20, db_index=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        indexes = [
-            models.Index(fields=["user", "coaching_style"]),
-        ]
-    
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"OnboardingStep(user={self.user_id}, style={self.coaching_style.value})"
+
 
 class TrackMood(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="moods", db_index=True)
