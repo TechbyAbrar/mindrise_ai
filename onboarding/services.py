@@ -1,31 +1,32 @@
-# services.py
+from typing import List
+from django.db import transaction
+from .models import OnboardingStep, CoachingStyle
+
 from typing import List
 from django.db import transaction
 from .models import OnboardingStep, CoachingStyle
 
 class OnboardingService:
-
     @staticmethod
     @transaction.atomic
-    def create_onboarding(user_id: int, coaching_style: str, focus: List[str]) -> OnboardingStep:
-        if not CoachingStyle.objects.filter(value=coaching_style, is_active=True).exists():
+    def create_onboarding(user, coaching_style: CoachingStyle, focus: List[str]) -> OnboardingStep:
+        if not coaching_style.is_active:
             raise ValueError("Coaching style does not exist")
 
-        # Create onboarding; raise error if already exists
-        onboarding, created = OnboardingStep.objects.get_or_create(
-            user_id=user_id,
-            coaching_style=coaching_style,
-            defaults={"focus": focus}
+        if hasattr(user, "onboarding"):
+            raise ValueError("Onboarding already exists for this user")
+
+        # Coaching style name will also auto-fill via model save
+        onboarding = OnboardingStep.objects.create(
+            user=user,
+            coaching_style_id=coaching_style,
+            focus=focus
         )
-
-        if not created:
-            raise ValueError("Onboarding already exists")
-
         return onboarding
 
     @staticmethod
-    def get_onboarding(user_id: int, coaching_style: str) -> OnboardingStep:
+    def get_onboarding(user) -> OnboardingStep:
         try:
-            return OnboardingStep.objects.get(user_id=user_id, coaching_style=coaching_style)
+            return user.onboarding
         except OnboardingStep.DoesNotExist:
             raise ValueError("Onboarding does not exist")

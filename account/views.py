@@ -1,6 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
 from django.db import transaction
+
 
 from .serializers import SignupSerializer, UserSerializer, VerifyOTPSerializer
 from .services import send_otp_email, generate_tokens_for_user, generate_otp
@@ -429,3 +432,15 @@ class UserDeleteAPIView(APIView):
         except Exception as exc:
             logger.exception("Failed to delete user %s", user_id)
             return ResponseHandler.server_error("Internal server error")
+        
+class GetUserInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = UserSerializer(user)
+        return Response({
+            'success': True,
+            'message': 'User info retrieved successfully',
+            'data': serializer.data
+            }, status=status.HTTP_200_OK)
