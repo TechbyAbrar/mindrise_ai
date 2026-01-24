@@ -2,9 +2,7 @@ from django.contrib import admin
 from .models import CoachingStyle, OnboardingStep, TrackMood
 
 
-# --------------------------------
-# CoachingStyle Admin
-# --------------------------------
+
 @admin.register(CoachingStyle)
 class CoachingStyleAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "value", "is_active", "order", "created_at")
@@ -15,9 +13,7 @@ class CoachingStyleAdmin(admin.ModelAdmin):
     list_editable = ("is_active", "order")
 
 
-# --------------------------------
-# OnboardingStep Admin
-# --------------------------------
+
 @admin.register(OnboardingStep)
 class OnboardingStepAdmin(admin.ModelAdmin):
     list_display = (
@@ -33,26 +29,10 @@ class OnboardingStepAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
-# --------------------------------
-# TrackMood Admin
-# --------------------------------
+
 @admin.register(TrackMood)
 class TrackMoodAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "user",
-        "mood_score",
-        "mood_label",
-        "mood_date",
-        "created_at",
-    )
+    list_display = ("user", "mood_score", "mood_label", "mood_date")
     list_filter = ("mood_score", "mood_date")
-    search_fields = ("user__username", "mood_label")
-    readonly_fields = ("created_at", "updated_at")
+    search_fields = ("user__username", "journal")
     ordering = ("-mood_date",)
-
-    # Optional: allow editing feel JSON inline safely
-    def get_readonly_fields(self, request, obj=None):
-        if obj:
-            return self.readonly_fields + ("feel",)
-        return self.readonly_fields

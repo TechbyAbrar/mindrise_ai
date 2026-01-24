@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import OnboardingStep, CoachingStyle
+from .models import OnboardingStep, CoachingStyle, TrackMood
 
 class OnboardingSerializer(serializers.ModelSerializer):
     # Input/output flat field
@@ -22,3 +22,23 @@ class OnboardingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["user_id", "coaching_style_name", "created_at", "updated_at"]
+
+
+class TrackMoodSerializer(serializers.ModelSerializer):
+    mood_label = serializers.ReadOnlyField()
+    user = serializers.ReadOnlyField(source="user.user_id")
+
+    class Meta:
+        model = TrackMood
+        fields = [
+            "id",
+            "user",
+            "mood_score",
+            "mood_label",
+            "feel",
+            "journal",
+            "mood_date",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("user", "created_at", "updated_at")

@@ -60,7 +60,7 @@ class OnboardingStep(models.Model):
         help_text="coaching style name snapshot at creation"
     )
 
-    focus = models.JSONField(default=list, blank=True)
+    focus = models.JSONField(default=list, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
