@@ -17,7 +17,7 @@ class OnboardingService:
 
         return OnboardingStep.objects.create(
             user=user,
-            coaching_style=coaching_style,
+            coaching_style_id=coaching_style,
             focus=focus,
         )
 
@@ -38,7 +38,7 @@ class OnboardingService:
         onboarding, created = OnboardingStep.objects.update_or_create(
             user=user,
             defaults={
-                "coaching_style": coaching_style,
+                "coaching_style_id": coaching_style,  # ✅ FIX
                 "focus": focus,
             },
         )

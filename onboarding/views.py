@@ -4,8 +4,11 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .serializers import OnboardingSerializer, TrackMoodSerializer
 from .services import OnboardingService, TrackMoodService
-from .models import CoachingStyle
+from .models import TrackMood
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils.timezone import now
+from datetime import timedelta
+from django.db.models import Count
 
 class OnboardingAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -121,3 +124,57 @@ class TrackMoodDetailAPIView(APIView):
             'success': True,
             'message': 'Mood entry deleted successfully'
         }, status=status.HTTP_204_NO_CONTENT)
+
+
+class WeeklyMoodSummaryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        today = now().date()
+        week_start = today - timedelta(days=6)
+
+        # Last mood entry
+        last_mood = (
+            TrackMood.objects
+            .filter(user=user)
+            .order_by("-mood_date")
+            .first()
+        )
+
+        last_mood_data = (
+            TrackMoodSerializer(last_mood).data if last_mood else None
+        )
+
+        # Weekly check-ins
+        weekly_qs = TrackMood.objects.filter(
+            user=user,
+            mood_date__range=[week_start, today]
+        )
+
+        checked_in_days = weekly_qs.count()
+
+        # Weekly mood statistics
+        mood_counts = (
+            weekly_qs
+            .values("mood_score")
+            .annotate(total=Count("id"))
+        )
+
+        mood_map = dict(TrackMood.MOOD_CHOICES)
+        weekly_mood_stats = {
+            mood_map[item["mood_score"]]: item["total"]
+            for item in mood_counts
+        }
+
+        return Response({
+            "success": True,
+            "message": "Weekly mood summary retrieved successfully",
+            "last_checkin": last_mood_data,
+            "weekly_checkins": {
+                "checked_in_days": checked_in_days,
+                "total_days": 7,
+                "missed_days": 7 - checked_in_days
+            },
+            "weekly_mood_stats": weekly_mood_stats
+        })

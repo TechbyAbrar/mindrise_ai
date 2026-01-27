@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from .serializers import UserProfileUpdateInputSerializer
 
 from .serializers import SignupSerializer, UserSerializer, VerifyOTPSerializer
 from .services import send_otp_email, generate_tokens_for_user, generate_otp
@@ -444,3 +446,66 @@ class GetUserInfoAPIView(APIView):
             'message': 'User info retrieved successfully',
             'data': serializer.data
             }, status=status.HTTP_200_OK)
+        
+        
+# profile update api
+
+from django.db import transaction
+class UserProfileService:
+
+    @staticmethod
+    @transaction.atomic
+    def update_profile(
+        *,
+        user,
+        full_name=None,
+        profile_pic=None,
+    ):
+        updated_fields = []
+
+        if full_name is not None:
+            user.full_name = full_name
+            updated_fields.append("full_name")
+
+        if profile_pic is not None:
+            user.profile_pic = profile_pic
+            updated_fields.append("profile_pic")
+
+        if updated_fields:
+            user.save(update_fields=updated_fields)
+
+        return user
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+class  UserProfileUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    parser_classes = (
+        JSONParser, 
+        MultiPartParser, 
+        FormParser,       
+    )
+
+    def patch(self, request):
+        serializer = UserProfileUpdateInputSerializer(
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+
+        user = UserProfileService.update_profile(
+            user=request.user,
+            **serializer.validated_data
+        )
+
+        return Response(
+            {
+                "message": "Profile updated successfully",
+                "data": {
+                    "full_name": user.full_name,
+                    "profile_pic": (
+                        user.profile_pic.url if user.profile_pic else None
+                    ),
+                },
+            },
+            status=status.HTTP_200_OK
+        )

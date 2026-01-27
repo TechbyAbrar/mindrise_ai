@@ -73,3 +73,6 @@ def send_otp_sms(phone: str, otp: str) -> bool:
 def generate_tokens_for_user(user: Any) -> Dict[str, str]:
     refresh = RefreshToken.for_user(user)
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
+

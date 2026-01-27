@@ -118,3 +118,16 @@ class VerifyOTPSerializer(serializers.Serializer):
             user.otp_expired = None
             user.save(update_fields=["is_verified", "otp", "otp_expired_at"])
         return user
+    
+    
+# update profile
+class UserProfileUpdateInputSerializer(serializers.Serializer):
+    full_name = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=False
+    )
+
+    profile_pic = serializers.ImageField(
+        required=False
+    )
