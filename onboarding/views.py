@@ -1,14 +1,23 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
+# Standard library
+from datetime import timedelta, datetime
+from calendar import monthrange
+# Django
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Avg, Count
+from django.utils import timezone
+from django.utils.timezone import now
+
+# Django REST Framework
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+# Local apps
+from .models import TrackMood
 from .serializers import OnboardingSerializer, TrackMoodSerializer
 from .services import OnboardingService, TrackMoodService
-from .models import TrackMood
-from django.core.exceptions import ObjectDoesNotExist
-from django.utils.timezone import now
-from datetime import timedelta
-from django.db.models import Count
+
 
 class OnboardingAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -177,4 +186,249 @@ class WeeklyMoodSummaryAPIView(APIView):
                 "missed_days": 7 - checked_in_days
             },
             "weekly_mood_stats": weekly_mood_stats
+        })
+        
+        
+# calculate streaks
+
+# class MoodReportAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         user = request.user
+#         today = timezone.now().date()
+
+#         days = int(request.query_params.get("days", 7))
+#         month_param = request.query_params.get("month", today.strftime("%Y-%m"))
+        
+#         mood_dates = set(
+#             TrackMood.objects
+#             .filter(user=user)
+#             .values_list("mood_date", flat=True)
+#         )
+
+#         current_streak = 0
+#         check_date = today
+
+#         while check_date in mood_dates:
+#             current_streak += 1
+#             check_date -= timedelta(days=1)
+
+#         last_mood_date = today if today in mood_dates else None
+
+
+#         start_date = today - timedelta(days=days - 1)
+
+#         mood_qs = (
+#             TrackMood.objects
+#             .filter(user=user, mood_date__range=(start_date, today))
+#             .values("mood_date")
+#             .annotate(avg_mood=Avg("mood_score"))
+#         )
+
+#         mood_map = {
+#             row["mood_date"]: round(row["avg_mood"], 2)
+#             for row in mood_qs
+#         }
+
+#         mood_history = []
+#         for i in range(days):
+#             date = start_date + timedelta(days=i)
+#             mood_history.append({
+#                 "date": date,
+#                 "day": date.strftime("%a").upper(),  # MON, TUE, WED
+#                 "avg_mood": mood_map.get(date, 0)
+#             })
+
+
+#         year, month = map(int, month_param.split("-"))
+#         month_start = datetime(year, month, 1).date()
+#         month_end = datetime(
+#             year, month, monthrange(year, month)[1]
+#         ).date()
+
+#         active_days = list(
+#             TrackMood.objects
+#             .filter(
+#                 user=user,
+#                 mood_date__range=(month_start, month_end)
+#             )
+#             .values_list("mood_date", flat=True)
+#             .distinct()
+#         )
+
+#         activity_log = sorted({d.day for d in active_days})
+
+#         # =====================================================
+#         # FINAL RESPONSE
+#         # =====================================================
+#         return Response({
+#             "streak": {
+#                 "current_days": current_streak,
+#                 "last_mood_date": last_mood_date,
+#             },
+#             "mood_history": mood_history,
+#             "activity_log": {
+#                 "month": month_param,
+#                 "active_days": activity_log,
+#             }
+#         })
+
+from datetime import datetime, timedelta
+from django.db.models import Avg
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+
+from .models import TrackMood
+
+
+ISO_DATE_FORMAT = "%Y-%m-%d"
+
+
+def parse_iso_date(value: str, field_name: str):
+    if not value:
+        raise ValidationError({
+            field_name: "This field is required in ISO format YYYY-MM-DD."
+        })
+    try:
+        return datetime.strptime(value, ISO_DATE_FORMAT).date()
+    except ValueError:
+        raise ValidationError({
+            field_name: "Invalid date format. Expected YYYY-MM-DD."
+        })
+
+
+class MoodReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        today = timezone.now().date()
+
+        # =====================================================
+        # STRICT DATE RANGE HANDLING
+        # =====================================================
+        range_param = request.query_params.get("range")
+        start_date_param = request.query_params.get("start_date")
+        end_date_param = request.query_params.get("end_date")
+
+        if range_param:
+            # ?range=7d / 30d
+            if not range_param.endswith("d") or not range_param[:-1].isdigit():
+                return Response(
+                    {"range": "Invalid range format. Example: 7d, 30d"},
+                    status=400,
+                )
+
+            days = int(range_param[:-1])
+            if days <= 0:
+                return Response(
+                    {"range": "Range must be greater than 0 days."},
+                    status=400,
+                )
+
+            end_date = today
+            start_date = end_date - timedelta(days=days - 1)
+
+        elif start_date_param or end_date_param:
+            # BOTH required
+            if not (start_date_param and end_date_param):
+                return Response(
+                    {"error": "Both start_date and end_date are required."},
+                    status=400,
+                )
+
+            start_date = parse_iso_date(start_date_param, "start_date")
+            end_date = parse_iso_date(end_date_param, "end_date")
+
+            if start_date > end_date:
+                return Response(
+                    {"error": "start_date cannot be greater than end_date."},
+                    status=400,
+                )
+
+        else:
+            return Response(
+                {
+                    "error": (
+                        "Provide either ?range=7d "
+                        "OR ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD"
+                    )
+                },
+                status=400,
+            )
+
+        total_days = (end_date - start_date).days + 1
+
+        # =====================================================
+        # MOOD AGGREGATION (SINGLE QUERY)
+        # =====================================================
+        mood_qs = (
+            TrackMood.objects
+            .filter(
+                user=user,
+                mood_date__range=(start_date, end_date)
+            )
+            .values("mood_date")
+            .annotate(avg_mood=Avg("mood_score"))
+        )
+
+        mood_map = {
+            row["mood_date"]: round(row["avg_mood"], 2)
+            for row in mood_qs
+        }
+
+        # =====================================================
+        # MOOD HISTORY (ALIGNED, NULL FOR MISSING)
+        # =====================================================
+        mood_history = [
+            {
+                "date": d,
+                "day": d.strftime("%a").upper(),
+                "avg_mood": mood_map.get(d, None),  # change to -1 if needed
+            }
+            for d in (
+                start_date + timedelta(days=i)
+                for i in range(total_days)
+            )
+        ]
+
+        # =====================================================
+        # STREAK (FROM END_DATE BACKWARDS)
+        # =====================================================
+        mood_dates = set(mood_map.keys())
+        current_streak = 0
+        check_date = end_date
+
+        while check_date in mood_dates:
+            current_streak += 1
+            check_date -= timedelta(days=1)
+
+        last_mood_date = end_date if end_date in mood_dates else None
+
+        # =====================================================
+        # ACTIVITY LOG (SAME RANGE)
+        # =====================================================
+        active_days = sorted(d.day for d in mood_dates)
+
+        # =====================================================
+        # FINAL RESPONSE
+        # =====================================================
+        return Response({
+            "range": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "total_days": total_days,
+            },
+            "streak": {
+                "current_days": current_streak,
+                "last_mood_date": last_mood_date,
+            },
+            "mood_history": mood_history,
+            "activity_log": {
+                "active_days": active_days,
+            },
         })

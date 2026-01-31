@@ -136,17 +136,12 @@ class TrackMood(models.Model):
     )
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "mood_date"],
-                name="unique_user_mood_per_day"
-            )
-        ]
         indexes = [
             models.Index(fields=["user", "mood_date"]),
+            models.Index(fields=["user", "created_at"]),
             models.Index(fields=["user", "mood_score"]),
         ]
-        ordering = ["-mood_date"]
+        ordering = ["-created_at"]
         verbose_name = "Mood Entry"
         verbose_name_plural = "Mood Entries"
 
