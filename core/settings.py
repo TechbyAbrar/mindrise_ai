@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'onboarding',
     'privacy',
     'subscription',
+    'notification',
 ]
 
 
