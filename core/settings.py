@@ -66,7 +66,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 MIDDLEWARE = [
-     "corsheaders.middleware.CorsMiddleware",  # CORS first
+    "corsheaders.middleware.CorsMiddleware",  # CORS first
     'django.middleware.security.SecurityMiddleware',
     "whitenoise.middleware.WhiteNoiseMiddleware", # WhiteNoise
     'django.contrib.sessions.middleware.SessionMiddleware',
