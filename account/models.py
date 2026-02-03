@@ -28,7 +28,7 @@ class UserAuth(AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=255)
     profile_pic = models.ImageField(
         upload_to="profile/",
-        default="profile/profile.png",
+        # default="profile/profile.png",
         null=True,
         blank=True,
         validators=[validate_image],
